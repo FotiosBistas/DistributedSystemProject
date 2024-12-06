@@ -29,4 +29,4 @@ def segment_video(video_path, output_dir, chunk_length=120):
     return chunk_paths
 
 
-#segment_video("./test.mp4", "./output")
+segment_video("./test.mp4", "./output")
