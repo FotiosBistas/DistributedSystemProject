@@ -5,3 +5,5 @@
 azure-functions
 azurefunctions-extensions-bindings-blob
 moviepy
+opencv-python-headless
+
