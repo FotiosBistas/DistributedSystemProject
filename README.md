@@ -28,4 +28,10 @@ docker exec -it kafka kafka-topics --create --topic test-topic --bootstrap-serve
 docker exec -it kafka kafka-topics --list --bootstrap-server localhost:9092
 ```
 
+## Remove topic 
+
+```
+docker exec -it kafka kafka-topics --delete --topic test-topic --bootstrap-server localhost:9092
+```
+
 This should install and build locally.
