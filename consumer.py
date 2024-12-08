@@ -2,15 +2,27 @@ import json
 import logging
 
 from kafka import KafkaConsumer
+from kafka import KafkaProducer
 
 logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.DEBUG,  
+    format="%(asctime)s - %(levelname)s - %(message)s",  
+    handlers=[
+        logging.FileHandler("consumer_logs.log"),  
+        logging.StreamHandler()  
+    ]
 )
+
+logging.getLogger("kafka").setLevel(logging.WARNING)
 
 consumer = KafkaConsumer(
     "car",
     bootstrap_servers="localhost:9092",
+)
+
+producer = KafkaProducer(
+    bootstrap_servers="localhost:9092",
+    value_serializer=lambda v: json.dumps(v).encode('utf-8')
 )
 
 #TODO this should be filled with the actuals values of the green line
@@ -59,7 +71,11 @@ for message in consumer:
         if speed > 130:
             logging.info(f"ALERT: {vehicle['vehicle_id']} moving at {speed} km/h")
 
-        # Reset data for the vehicle to calculate again in the future
-        vehicle_data[vehicle_id] = {"y1_crossed_time": None, "y2_crossed_time": None}
+        # Remove data for the vehicle to calculate again in the future
+        vehicle_data.pop(vehicle_id, f"No vehicle with ID {vehicle_id}")
+
+        producer.send("processed_car", vehicle_data)
+
+        logging.info("Sent data to processed_car topic")
 
 

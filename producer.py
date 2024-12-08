@@ -1,7 +1,20 @@
-from kafka import KafkaProducer
 import json
 import time
 import random
+import logging
+
+from kafka import KafkaProducer
+
+logging.getLogger("kafka").setLevel(logging.WARNING)
+
+logging.basicConfig(
+    level=logging.DEBUG,  
+    format="%(asctime)s - %(levelname)s - %(message)s",  
+    handlers=[
+        logging.FileHandler("producer_logs.log"),  
+        logging.StreamHandler()  
+    ]
+)
 
 # Kafka producer setup
 producer = KafkaProducer(
@@ -20,12 +33,12 @@ for i in range(100):  # Total messages to send
     vehicle = {
         "vehicle_id": car_id,
         "timestamp": time.time(),
-        "position": {"x": random.randint(0, 100), "y": random.randint(0, 100)},
+        "position": {"x": random.randint(i, 100), "y": random.randint(i, 100)},
         "type": "car" if i % 2 == 0 else "truck"
     }
 
     # Send the vehicle data to the Kafka topic
     producer.send("car", vehicle)
-    print(f"Sent: {vehicle}")
+    logging.info(f"Sent: {vehicle}")
 
     time.sleep(1)  # Simulate a 1-second delay between messages
