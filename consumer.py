@@ -16,7 +16,7 @@ logging.basicConfig(
 logging.getLogger("kafka").setLevel(logging.WARNING)
 
 consumer = KafkaConsumer(
-    "car",
+    "cars",
     bootstrap_servers="localhost:9092",
 )
 
@@ -71,11 +71,15 @@ for message in consumer:
         if speed > 130:
             logging.info(f"ALERT: {vehicle['vehicle_id']} moving at {speed} km/h")
 
+        vehicle["speed"] = speed
+
+        producer.send("processed_cars", vehicle)
+
+        logging.info(f"Sent data {vehicle} to processed_car topic")
+
         # Remove data for the vehicle to calculate again in the future
         vehicle_data.pop(vehicle_id, f"No vehicle with ID {vehicle_id}")
 
-        producer.send("processed_car", vehicle_data)
 
-        logging.info("Sent data to processed_car topic")
 
 

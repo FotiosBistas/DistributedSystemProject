@@ -38,7 +38,7 @@ for i in range(100):  # Total messages to send
     }
 
     # Send the vehicle data to the Kafka topic
-    producer.send("car", vehicle)
+    producer.send("cars", vehicle)
     logging.info(f"Sent: {vehicle}")
 
     time.sleep(1)  # Simulate a 1-second delay between messages
