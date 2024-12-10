@@ -15,6 +15,7 @@ schema = StructType([
         StructField("y", FloatType(), True)
     ]), True),
     StructField("type", StringType(), True),
+    StructField("lane", StringType(), True),
     StructField("speed", FloatType(), True),
 ])
 
@@ -27,8 +28,6 @@ spark = SparkSession \
     .master("local[*]") \
     .getOrCreate()
 
-
-print(spark.sparkContext._jsc.sc().listJars())
 
 streaming_df = spark.readStream\
     .format("kafka") \
