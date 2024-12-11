@@ -33,7 +33,8 @@ car_data_df = spark.read \
     .options(**db_properties) \
     .load()
 
-car_data_df = car_data_df.withColumn("timestamp", (col("timestamp") / 1000).cast("timestamp"))
+# Do not divide by 1000 since the timestamps must be in seconds
+car_data_df = car_data_df.withColumn("timestamp", col("timestamp").cast("timestamp"))
 
 average_speed_df = car_data_df.groupBy(
     window(col("timestamp"), "1 minutes"),  
