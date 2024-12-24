@@ -33,7 +33,7 @@ if __name__ == '__main__':
         'sasl.mechanism': 'PLAIN',
         'sasl.username': '$ConnectionString',
         'sasl.password': env_values["EVENT_HUB_CARS_PRODUCE"],
-        'client.id': 'python-example-producer'
+        'client.id': 'car-producer'
     }
 
     # Create Producer instance

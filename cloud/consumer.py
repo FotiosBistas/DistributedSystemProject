@@ -7,7 +7,7 @@
 #
 # Original Confluent sample modified for use with Azure Event Hubs for Apache Kafka Ecosystems
 
-from confluent_kafka import Consumer, KafkaException, KafkaError
+from confluent_kafka import Producer, Consumer, KafkaException, KafkaError
 import sys
 import getopt
 import json
@@ -17,6 +17,11 @@ from dotenv import dotenv_values
 
 env_values = dotenv_values("./.env", verbose=True)
 
+GREEN_LINE_Y1 = 10
+GREEN_LINE_Y2 = 30
+DISTANCE_BETWEEN_LINES = GREEN_LINE_Y2 - GREEN_LINE_Y1
+
+vehicle_data = {}
 
 def stats_cb(stats_json_str):
     stats_json = json.loads(stats_json_str)
@@ -50,7 +55,7 @@ if __name__ == '__main__':
         'sasl.username': '$ConnectionString',
         'sasl.password': env_values["EVENT_HUB_CARS_CONSUME"],   
         'group.id': group,
-        'client.id': 'python-example-consumer',
+        'client.id': 'car-consumer',
         'request.timeout.ms': 60000,
         'session.timeout.ms': 60000,
         'default.topic.config': {'auto.offset.reset': 'smallest'}
@@ -91,6 +96,7 @@ if __name__ == '__main__':
     c.subscribe(topics, on_assign=print_assignment)
 
     # Read messages from Kafka, print to stdout
+    message = None
     try:
         while True:
             msg = c.poll(timeout=100.0)
@@ -107,7 +113,70 @@ if __name__ == '__main__':
                     raise KafkaException(msg.error())
             else:
                 # Proper message
-                print(msg.value())
+                vehicle = json.loads(msg.value().decode('utf-8'))
+                print(vehicle)
+
+                vehicle_id = vehicle["vehicle_id"]
+                timestamp = vehicle["timestamp"]
+                y_position = vehicle["position"]["y"]
+
+                if vehicle_id not in vehicle_data:
+                    #TODO this should be all the available instances of the green line (there are multiple green lines) 
+                    # There are multiple green lines
+                    vehicle_data[vehicle_id] = {"y1_timestamp": None, "y2_timestamp": None}
+
+                # Check if it hasn't crossed the Y1 green line yet
+                #TODO what happens if its detected after Y2?
+                if y_position >= GREEN_LINE_Y1 and y_position < GREEN_LINE_Y2: 
+                    vehicle_data[vehicle_id]["y1_timestamp"] = timestamp
+                    logging.debug(f"{vehicle_id} has passed the first line")
+
+                # Check if it hasn't crossed the Y2 green line yet
+                if y_position >= GREEN_LINE_Y2 and vehicle_data[vehicle_id]["y1_timestamp"] is not None:
+                    vehicle_data[vehicle_id]["y2_timestamp"] = timestamp
+                    logging.debug(f"{vehicle_id} has passed the second line")
+
+                    time_taken = vehicle_data[vehicle_id]["y2_timestamp"] - vehicle_data[vehicle_id]["y1_timestamp"]
+                    speed = DISTANCE_BETWEEN_LINES / time_taken
+
+                    logging.info(f"{vehicle_id} speed: {speed:.2f} m/s")
+
+                    if speed > 130:
+                        logging.info(f"ALERT: {vehicle['vehicle_id']} moving at {speed} km/h")
+
+                    vehicle["speed"] = speed
+
+                # Producer configuration
+                # See https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md
+                # See https://github.com/edenhill/librdkafka/wiki/Using-SSL-with-librdkafka#prerequisites for SSL issues
+                conf = {
+                    'bootstrap.servers': 'cartopics.servicebus.windows.net:9093', #replace
+                    'security.protocol': 'SASL_SSL',
+                    'ssl.ca.location': '/usr/lib/ssl/certs/ca-certificates.crt',
+                    'sasl.mechanism': 'PLAIN',
+                    'sasl.username': '$ConnectionString',
+                    'sasl.password': env_values["EVENT_HUB_PROCESSED_CARS_PRODUCE"],
+                    'client.id': 'processed-car-producer'
+                }
+
+                # Create Producer instance
+                p = Producer(**conf)
+
+                def delivery_callback(err, msg):
+                    if err:
+                        sys.stderr.write('%% Message failed delivery: %s\n' % err)
+                    else:
+                        sys.stderr.write('%% Message delivered to %s [%d] @ %o\n' % (msg.topic(), msg.partition(), msg.offset()))
+
+                # Send the vehicle data to the Kafka topic
+                vehicle = json.dumps(obj=vehicle, indent=2).encode("utf-8")
+                try:
+                    p.produce("processed_cars", vehicle, callback=delivery_callback)
+                except BufferError as e:
+                    sys.stderr.write('%% Local producer queue is full (%d messages awaiting delivery): try again\n' % len(p))
+                p.poll(0)
+                p.flush()
+
 
     except KeyboardInterrupt:
         sys.stderr.write('%% Aborted by user\n')
