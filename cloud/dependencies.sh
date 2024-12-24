@@ -11,5 +11,5 @@ sudo make install
 cd ..
 
 echo "Setting up Confluent's Python Kafka library"
-sudo pip install confluent-kafka
+../.venv/bin/pip install confluent-kafka
 echo "Try running the samples now!"
