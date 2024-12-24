@@ -56,3 +56,50 @@ db_properties = {
 ```
 
 Note that the `'PGUSER'` and `'PGPASSWORD'` environment should be read from a `.env` file inside the root directory or set as environment variables.
+
+
+# Cloud deployment 
+
+
+## Kafka 
+
+Create a new namespace using Azure's event hub: 
+
+!["Event Hub Namespace"](event_hub_namespace.png)
+
+
+Kafka config to connect to the `Event Hub Namespace`.
+
+```
+bootstrap.servers=NAMESPACENAME.servicebus.windows.net:9093
+security.protocol=SASL_SSL
+sasl.mechanism=PLAIN
+sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="$ConnectionString" password="{YOUR.EVENTHUBS.CONNECTION.STRING}";
+```
+
+Create a new event hub: 
+!["Event Hub"](event_hub.png)
+
+
+Kafka config to connect to a specific event hub: 
+
+```
+   from kafka import KafkaProducer
+
+   # Replace with your Event Hubs connection string
+   producer = KafkaProducer(bootstrap_servers=['<your_event_hub_namespace>.servicebus.windows.net:9093'],
+                            security_protocol='SASL_SSL',
+                            sasl_mechanism='PLAIN',
+                            sasl_plain_username='$ConnectionString',
+                            sasl_plain_password='<your_connection_string>')
+
+   for _ in range(50):
+       producer.send('<your_event_hub_name>', b'test message')
+   
+```
+
+
+We should use the confluent kafka: 
+- Setup: https://github.com/Azure/azure-event-hubs-for-kafka/blob/master/quickstart/python/setup.sh
+- Producer: https://github.com/Azure/azure-event-hubs-for-kafka/blob/master/quickstart/python/producer.py
+- Consumer: https://github.com/Azure/azure-event-hubs-for-kafka/blob/master/quickstart/python/consumer.py

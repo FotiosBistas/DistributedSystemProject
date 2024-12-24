@@ -5,6 +5,7 @@ import logging
 import numpy as np
 from kafka import KafkaProducer
 from datetime import datetime, timedelta
+from dotenv import dotenv_values
 
 logging.getLogger("kafka").setLevel(logging.WARNING)
 
@@ -17,10 +18,20 @@ logging.basicConfig(
     ]
 )
 
+env_values = dotenv_values("./.env", verbose=True)
+
 # Kafka producer setup
+#producer = KafkaProducer(
+#    bootstrap_servers="localhost:9092",
+#    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+#)
+
 producer = KafkaProducer(
-    bootstrap_servers="localhost:9092",
-    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+    bootstrap_servers=["cars.servicebus.windows.net:9093"],
+    security_protocol="SASL_SSL",
+    sasl_mechanism="PLAIN",
+    sasl_plain_username="$ConnectionString",
+    sasl_plain_password=env_values["EVENT_HUB_CARS"]
 )
 
 # Define 10 specific car IDs
@@ -51,6 +62,8 @@ for i in range(10000):  # Total messages to send
 
     # Send the vehicle data to the Kafka topic
     producer.send("cars", vehicle)
+    producer.flush()
+
     logging.info(f"Sent: {vehicle}")
 
     time.sleep(1)  # Simulate a 1-second delay between messages

@@ -16,7 +16,7 @@ logging.basicConfig(
 logging.getLogger("kafka").setLevel(logging.WARNING)
 
 consumer = KafkaConsumer(
-    "cars",
+    "car",
     bootstrap_servers="localhost:9092",
 )
 
@@ -73,7 +73,7 @@ for message in consumer:
 
         vehicle["speed"] = speed
 
-        producer.send("processed_cars", vehicle)
+        producer.send("processed_car", vehicle)
 
         logging.info(f"Sent data {vehicle} to processed_car topic")
 
