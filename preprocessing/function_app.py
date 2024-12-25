@@ -1,20 +1,25 @@
 import os
+import shutil
 import logging
 import azure.functions as func
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceExistsError
+from dotenv import dotenv_values
+
+env_values = dotenv_values("../.env", verbose=True)
 
 
 
 SEGMENTS_CONTAINER = "input-segments-container"  
-BLOB_CONNECTION_STRING = "DefaultEndpointsProtocol=https;AccountName=imepaidakimalama;AccountKey=SxOC+9M1rR1qyVCNCevLpi7KkqD4DtFfKzIejtx+8BnOmp4gqz/RbBeiz4y21qsxoWAQpOIjKsGQ+AStwNVBSA==;EndpointSuffix=core.windows.net"
+BLOB_CONNECTION_STRING = env_values["STORAGE_CONNECTION"]
 
-#app = func.FunctionApp()
-bp = func.Blueprint()
+app = func.FunctionApp()
+#bp = func.Blueprint()
 
 #@app.blob_trigger(arg_name="myblob", path="main-video", connection="AzureWebjobsStorage") 
-@bp.blob_trigger(arg_name="myblob", path="main-video", connection="AzureWebjobsStorage")
+#@bp.blob_trigger(arg_name="myblob", path="main-video", connection="AzureWebjobsStorage")
+@app.blob_trigger(arg_name="myblob", path="main-video", connection="AzureWebjobsStorage")
 def video_preprocessing(myblob: func.InputStream):
     logging.info(f"Python blob trigger function processed blob "
                  f"Name: {myblob.name}, Blob Size: {myblob.length} bytes")
@@ -52,12 +57,13 @@ def video_preprocessing(myblob: func.InputStream):
             blob_client.upload_blob(data, overwrite=True)
             logging.info(f"Uploaded {chunk_name} to {SEGMENTS_CONTAINER}")
 
-    # Cleanup temporary files
+    # Cleanup temporary files and directory
     os.remove(temp_video_path)
     for chunk_path in chunk_paths:
         os.remove(chunk_path)
     
-    os.removedirs("./temp")
+    shutil.rmtree("./temp", ignore_errors=True)
+
 
 
 def segment_video(video_path: str, output_dir: str, chunk_length=120):
@@ -72,13 +78,24 @@ def segment_video(video_path: str, output_dir: str, chunk_length=120):
     Returns:
         list: List of file paths for the created video chunks.
     """
+    import logging
     from os import makedirs
     from os.path import join
 
     makedirs(output_dir, exist_ok=True)
     video = VideoFileClip(video_path)
     duration = video.duration  # Total duration in seconds
+
     chunk_paths = []
+
+    # Ensure chunk_length is an integer
+    chunk_length = int(chunk_length)
+
+    if duration < chunk_length:
+        # Log a warning and create a single chunk
+        logging.warning(f"Video duration ({duration}s) is smaller than chunk length ({chunk_length}s). "
+                        f"Creating a single chunk for the entire video.")
+        chunk_length = int(duration)  # Adjust the chunk length to the video's duration
 
     for start_time in range(0, int(duration), chunk_length):
         end_time = min(start_time + chunk_length, duration)
