@@ -15,7 +15,7 @@ import logging
 from pprint import pformat
 from dotenv import dotenv_values
 
-env_values = dotenv_values("./.env", verbose=True)
+env_values = dotenv_values("../.env", verbose=True)
 
 GREEN_LINE_Y1 = 10
 GREEN_LINE_Y2 = 30

@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from confluent_kafka import Producer
 from dotenv import dotenv_values
 
-env_values = dotenv_values("./.env", verbose=True)
+env_values = dotenv_values("../.env", verbose=True)
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
