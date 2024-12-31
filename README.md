@@ -32,3 +32,49 @@ You can set environment variables here:
 
 ![](./images/environment_variables.png "Environment Variables")
 
+# FunctionApp using the Azure Container Registry
+
+Login into azure using: 
+
+```
+az login
+```
+
+Login into the container registry using: 
+
+```
+az acr login --name <container_registry_name>
+```
+
+Build the image locally: 
+
+```
+docker build -t <image_name:tag> --name <container_registry_name> ./
+```
+
+Push the image to the cloud: 
+
+```
+docker push <container_registry_name>.azurecr.io/<image_name:tag>
+```
+
+You should be able to see it in the Container Registry's Repository section:
+
+![](./images/repositories_registry.png "")
+
+
+After this create a FunctionApp using the premium pricing plan: 
+
+![](./images/function_app_hosting.png "")
+
+
+Choose the option for the FunctionApp to be always on and go to the deployments section: 
+
+
+![](./images/function_app_deployment.png "")
+
+Select the desired image and registry.
+
+You should be able to see it running in the overview: 
+
+![](./images/function_app_overview.png "")
