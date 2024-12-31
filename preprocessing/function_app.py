@@ -1,10 +1,10 @@
 import os
+import subprocess
+import shlex
+import math
 import logging
-import sys
 import tempfile
 import azure.functions as func
-from tqdm import trange
-from moviepy.video.io.VideoFileClip import VideoFileClip
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceExistsError
 
@@ -33,7 +33,11 @@ def video_preprocessing(myblob: func.InputStream):
         f.write(myblob.read())
 
     # Create a temporary directory for video segments
-    chunk_paths = segment_video(temp_video_path, tempFilePath)
+    try: 
+        chunk_paths = segment_video(temp_video_path, tempFilePath)
+    except Exception as e: 
+        logging.error(f"Unexpected error during segmentation: {e}", exc_info=True)
+        raise e
 
     logging.info(f"Segment video created paths: {chunk_paths}")
 
@@ -64,10 +68,16 @@ def video_preprocessing(myblob: func.InputStream):
     
 
 
-
-def segment_video(video_path: str, output_dir: str, chunk_length=120):
-    """
-    Segments a video into smaller chunks.
+# code taken from https://github.com/c0decracker/video-splitter/blob/master/ffmpeg-split.py
+def segment_video(
+    video_path: str, 
+    output_dir: str, 
+    chunk_length=120,
+    vcodec="copy",
+    acodec="copy",
+    extra="",
+) -> list[str]:
+    """Segments a video into smaller chunks.
 
     Args:
         video_path (str): Path to the input video file.
@@ -77,37 +87,48 @@ def segment_video(video_path: str, output_dir: str, chunk_length=120):
     Returns:
         list: List of file paths for the created video chunks.
     """
-    import logging
     from os.path import join
 
-    video = VideoFileClip(video_path)
-    duration = video.duration  # Total duration in seconds
+    def _get_video_length():
+        output = subprocess.check_output(
+            ("ffprobe", "-v", "error", "-show_entries", "format=duration", "-of",
+            "default=noprint_wrappers=1:nokey=1", video_path)
+        ).strip()
+        video_length = int(float(output))
+        logging.debug(f"Video length in seconds: {video_length}")
 
+        return video_length
+
+    video_length = _get_video_length()
+
+    chunk_count = int(math.ceil(video_length / float(chunk_length)))
     chunk_paths = []
+    chunk_length = int(chunk_length)  # Ensure chunk_length is an integer
 
-    # Ensure chunk_length is an integer
-    chunk_length = int(chunk_length)
-
-    if duration < chunk_length:
-        # Log a warning and create a single chunk
-        logging.warning(f"Video duration ({duration}s) is smaller than chunk length ({chunk_length}s). "
+    if chunk_count == 1:
+        logging.warning(f"Video duration ({video_length}s) is smaller than chunk length ({chunk_length}s). "
                         f"Creating a single chunk for the entire video.")
-        chunk_length = int(duration)  # Adjust the chunk length to the video's duration
-
+        chunk_length = int(video_length)  # Adjust the chunk length to the video's duration
 
     logging.info("Starting to segment video")
-    for chunk_index, start_time in enumerate(trange(0, int(duration), chunk_length, file=sys.stderr)):
-        logging.info(f"Processing chunk {chunk_index}")
-        end_time = min(start_time + chunk_length, duration)
-        output_file = join(output_dir, f"chunk_{start_time}-{end_time}.mp4")
-        video.subclipped(start_time, end_time).write_videofile(
-            output_file, 
-            codec="libx264", 
-            audio=False, 
-            audio_codec="aac"
-        )
-        chunk_paths.append(output_file)
+    split_cmd = ["ffmpeg", "-y", "-i", video_path, "-vcodec", vcodec, "-acodec", acodec] + shlex.split(extra)
+
+    try:
+        filebase = os.path.basename(video_path).rsplit(".", 1)[0]
+        fileext = video_path.rsplit(".", 1)[-1]
+    except IndexError as e:
+        raise IndexError("No . in filename. Error: " + str(e))
+
+    for n in range(chunk_count):
+        split_args = []
+        split_start = n * chunk_length
+
+        output_path = join(output_dir, f"{filebase}-{n+1}-of-{chunk_count}.{fileext}") if output_dir else f"{filebase}-{n+1}-of-{chunk_count}.{fileext}"
+
+        split_args += ["-ss", str(split_start), "-t", str(chunk_length), output_path]
+        logging.info("About to run: " + " ".join(split_cmd + split_args))
+        subprocess.check_output(split_cmd + split_args)
+
+        chunk_paths.append(output_path)  # Add the output path to the list
 
     return chunk_paths
-
-
