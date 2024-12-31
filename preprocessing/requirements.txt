@@ -5,4 +5,4 @@
 azure-functions
 azurefunctions-extensions-bindings-blob
 moviepy
-
+tqdm
