@@ -1,43 +1,37 @@
 import os
-import shutil
 import logging
+import tempfile
 import azure.functions as func
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceExistsError
-from dotenv import dotenv_values
 
-env_values = dotenv_values("../.env", verbose=True)
 
 
 
 SEGMENTS_CONTAINER = "input-segments-container"  
-BLOB_CONNECTION_STRING = env_values["STORAGE_CONNECTION"]
+BLOB_CONNECTION_STRING = os.getenv("AzureWebJobsStorage")
 
 app = func.FunctionApp()
-#bp = func.Blueprint()
 
-#@app.blob_trigger(arg_name="myblob", path="main-video", connection="AzureWebjobsStorage") 
-#@bp.blob_trigger(arg_name="myblob", path="main-video", connection="AzureWebjobsStorage")
-@app.blob_trigger(arg_name="myblob", path="main-video", connection="AzureWebjobsStorage")
+@app.blob_trigger(arg_name="myblob", path="main-video/{name}", connection="AzureWebjobsStorage")
 def video_preprocessing(myblob: func.InputStream):
-    logging.info(f"Python blob trigger function processed blob "
+    logging.info(f"Python blob trigger function processing blob "
                  f"Name: {myblob.name}, Blob Size: {myblob.length} bytes")
 
-    os.makedirs("./temp", exist_ok=True)
+    tempFilePath = tempfile.gettempdir()
 
-    logging.info(f"Created temp directory")
+    logging.info(f"Found {tempFilePath} directory")
     # Extract just the file name from the blob name
     blob_filename = os.path.basename(myblob.name)
-    temp_video_path = f"./temp/{blob_filename}"
+    temp_video_path = f"{tempFilePath}/{blob_filename}"
     logging.info(f"Temp video path: {temp_video_path}")
 
     with open(temp_video_path, "wb") as f:
         f.write(myblob.read())
 
     # Create a temporary directory for video segments
-    output_dir = "./temp/"
-    chunk_paths = segment_video(temp_video_path, output_dir)
+    chunk_paths = segment_video(temp_video_path, tempFilePath)
 
     logging.info(f"Segment video created paths: {chunk_paths}")
 
@@ -58,11 +52,14 @@ def video_preprocessing(myblob: func.InputStream):
             logging.info(f"Uploaded {chunk_name} to {SEGMENTS_CONTAINER}")
 
     # Cleanup temporary files and directory
-    os.remove(temp_video_path)
-    for chunk_path in chunk_paths:
-        os.remove(chunk_path)
+    try: 
+        os.remove(temp_video_path)
+        for chunk_path in chunk_paths:
+            os.remove(chunk_path) 
+            logging.info(f"Removed video {chunk_path}")
+    except Exception as e:
+        logging.error(f"Unexpected error during cleanup: {e}", exc_info=True)
     
-    shutil.rmtree("./temp", ignore_errors=True)
 
 
 
@@ -79,10 +76,8 @@ def segment_video(video_path: str, output_dir: str, chunk_length=120):
         list: List of file paths for the created video chunks.
     """
     import logging
-    from os import makedirs
     from os.path import join
 
-    makedirs(output_dir, exist_ok=True)
     video = VideoFileClip(video_path)
     duration = video.duration  # Total duration in seconds
 
@@ -97,10 +92,17 @@ def segment_video(video_path: str, output_dir: str, chunk_length=120):
                         f"Creating a single chunk for the entire video.")
         chunk_length = int(duration)  # Adjust the chunk length to the video's duration
 
+
+    logging.info("Starting to segment video")
     for start_time in range(0, int(duration), chunk_length):
         end_time = min(start_time + chunk_length, duration)
         output_file = join(output_dir, f"chunk_{start_time}-{end_time}.mp4")
-        video.subclipped(start_time, end_time).write_videofile(output_file, codec="libx264", audio_codec="aac")
+        video.subclipped(start_time, end_time).write_videofile(
+            output_file, 
+            codec="libx264", 
+            audio=False, 
+            audio_codec="aac"
+        )
         chunk_paths.append(output_file)
 
     return chunk_paths
