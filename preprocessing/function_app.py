@@ -1,7 +1,9 @@
 import os
 import logging
+import sys
 import tempfile
 import azure.functions as func
+from tqdm import trange
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceExistsError
@@ -94,7 +96,8 @@ def segment_video(video_path: str, output_dir: str, chunk_length=120):
 
 
     logging.info("Starting to segment video")
-    for start_time in range(0, int(duration), chunk_length):
+    for chunk_index, start_time in enumerate(trange(0, int(duration), chunk_length, file=sys.stderr)):
+        logging.info(f"Processing chunk {chunk_index}")
         end_time = min(start_time + chunk_length, duration)
         output_file = join(output_dir, f"chunk_{start_time}-{end_time}.mp4")
         video.subclipped(start_time, end_time).write_videofile(
