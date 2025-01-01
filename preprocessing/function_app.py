@@ -54,9 +54,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     try: 
         chunk_paths = segment_video(temp_video_path, temp_file_path)
     except Exception as e: 
-        logging.error(f"An error occurred: {str(e)}")
+        logging.error(f"An error occurred while segmenting video: {str(e)}")
         return func.HttpResponse(
-            "An error occurred while processing the file.",
+            f"An error occurred while segmenting the video: {e}.",
             status_code=500
         )
 
@@ -71,12 +71,19 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     except ResourceExistsError:
         logging.info(f"Container '{SEGMENTS_CONTAINER}' already exists.")
 
-    for chunk_path in chunk_paths:
-        chunk_name = os.path.basename(chunk_path)
-        with open(chunk_path, "rb") as data:
-            blob_client = container_client.get_blob_client(chunk_name)
-            blob_client.upload_blob(data, overwrite=True)
-            logging.info(f"Uploaded {chunk_name} to {SEGMENTS_CONTAINER}")
+    try:
+        for chunk_path in chunk_paths:
+            chunk_name = os.path.basename(chunk_path)
+            with open(chunk_path, "rb") as data:
+                blob_client = container_client.get_blob_client(chunk_name)
+                blob_client.upload_blob(data, overwrite=True)
+                logging.info(f"Uploaded {chunk_name} to {SEGMENTS_CONTAINER}")
+    except Exception as e:
+        logging.error(f"Error {e} while uploading to blob storage.")
+        return func.HttpResponse(
+            f"Error while uploading chunk to blob storage: {e}.",
+            status_code=500
+        )
 
     # Cleanup temporary files and directory
     try: 
@@ -86,7 +93,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             logging.info(f"Removed video {chunk_path}")
     except Exception as e:
         return func.HttpResponse(
-            "An error occurred while processing the file.",
+            f"An error occurred while removing the files: {e}.",
             status_code=500
         )
 
