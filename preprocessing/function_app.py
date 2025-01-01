@@ -1,9 +1,9 @@
-import os
+import logging
 import subprocess
 import shlex
 import math
-import logging
 import tempfile
+import os
 import azure.functions as func
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceExistsError
@@ -16,34 +16,55 @@ BLOB_CONNECTION_STRING = os.getenv("AzureWebJobsStorage")
 
 app = func.FunctionApp()
 
-@app.blob_trigger(arg_name="myblob", path="main-video/{name}", connection="AzureWebjobsStorage")
-def video_preprocessing(myblob: func.InputStream):
-    logging.info(f"Python blob trigger function processing blob "
-                 f"Name: {myblob.name}, Blob Size: {myblob.length} bytes")
+@app.function_name(name="preprocessing")
+@app.route(route="video-preprocessing", auth_level=func.AuthLevel.ANONYMOUS)
+def main(req: func.HttpRequest) -> func.HttpResponse:
+    logging.info('HTTP POST trigger function processing a request.')
 
-    tempFilePath = tempfile.gettempdir()
+    temp_file_path = tempfile.gettempdir()
+    logging.info(f"Found {temp_file_path} directory")
 
-    logging.info(f"Found {tempFilePath} directory")
-    # Extract just the file name from the blob name
-    blob_filename = os.path.basename(myblob.name)
-    temp_video_path = f"{tempFilePath}/{blob_filename}"
+    # Get the uploaded file
+    file = req.files.get('file')
+
+    if not file:
+        return func.HttpResponse(
+            "No file found. Please upload an MP4 file.",
+            status_code=400
+        )
+
+    # Validate file type
+    if not file.filename.endswith('.mp4'):
+        return func.HttpResponse(
+            "Invalid file type. Only MP4 files are allowed.",
+            status_code=400
+        )
+
+    filename = os.path.basename(file.filename)
+    temp_video_path = f"{temp_file_path}/{filename}"
+    logging.info(f"Received MP4 file: {filename}, bytes.")
+
     logging.info(f"Temp video path: {temp_video_path}")
 
     with open(temp_video_path, "wb") as f:
-        f.write(myblob.read())
+        file_content = file.read()
+        f.write(file_content)
 
     # Create a temporary directory for video segments
     try: 
-        chunk_paths = segment_video(temp_video_path, tempFilePath)
+        chunk_paths = segment_video(temp_video_path, temp_file_path)
     except Exception as e: 
-        logging.error(f"Unexpected error during segmentation: {e}", exc_info=True)
-        raise e
+        logging.error(f"An error occurred: {str(e)}")
+        return func.HttpResponse(
+            "An error occurred while processing the file.",
+            status_code=500
+        )
 
     logging.info(f"Segment video created paths: {chunk_paths}")
-
     # Upload each segment to the "input-segments-container"
     blob_service_client = BlobServiceClient.from_connection_string(BLOB_CONNECTION_STRING)
     container_client = blob_service_client.get_container_client(SEGMENTS_CONTAINER)
+
     try:
         container_client.create_container()
         logging.info(f"Container '{SEGMENTS_CONTAINER}' created.")
@@ -64,8 +85,12 @@ def video_preprocessing(myblob: func.InputStream):
             os.remove(chunk_path) 
             logging.info(f"Removed video {chunk_path}")
     except Exception as e:
-        logging.error(f"Unexpected error during cleanup: {e}", exc_info=True)
-    
+        return func.HttpResponse(
+            "An error occurred while processing the file.",
+            status_code=500
+        )
+
+    return func.HttpResponse(f"File '{filename}' processed successfully!", status_code=200)
 
 
 # code taken from https://github.com/c0decracker/video-splitter/blob/master/ffmpeg-split.py
