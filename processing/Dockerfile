@@ -1,23 +1,22 @@
-FROM mcr.microsoft.com/azure-functions/python:4-python3.12
+# To enable ssh & remote debugging on app service change the base image to the one below 
+#FROM mcr.microsoft.com/azure-functions/python:4-python3.11-appservice
+FROM mcr.microsoft.com/azure-functions/python:4-python3.11
 
 # Install dependencies
-WORKDIR /home/site/wwwroot
-COPY . ./
+ENV AzureWebJobsScriptRoot=/home/site/wwwroot \
+    AzureFunctionsJobHost__Logging__Console__IsEnabled=true
 
-RUN apt-get update && apt-get install -y \
-    curl gnupg && \
-    curl -sL https://deb.nodesource.com/setup_16.x | bash - && \
-    apt-get install -y nodejs && \
-    npm install -g azure-functions-core-tools@4 --unsafe-perm true && \
-    apt-get clean
+RUN apt-get update && apt-get install -y 
+#    curl gnupg && \
+#    curl -sL https://deb.nodesource.com/setup_16.x | bash - && \
+#    apt-get install -y nodejs && \
+#    npm install -g azure-functions-core-tools@4 --unsafe-perm true && \
+#    apt-get clean
+#
 
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt ./
 
-ENV PYTHONUNBUFFERED=1
+RUN pip install -r ./requirements.txt
 
-# Expose Azure Functions default port
-EXPOSE 7071
-
-CMD ["func", "start"]
-
+COPY . /home/site/wwwroot/
 
