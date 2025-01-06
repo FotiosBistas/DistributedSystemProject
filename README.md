@@ -52,6 +52,12 @@ Build the image locally:
 docker build -t <image_name:tag> --name <container_registry_name> ./
 ```
 
+Check if it runs correctly locally: 
+
+```
+docker run -e AzureWebJobsStorage=<value> -p 8080:80 <image_name:tag> 
+```
+
 Push the image to the cloud: 
 
 ```
