@@ -1,0 +1,5 @@
+local.settings.json
+.vscode
+.python_packages
+__pycache__
+.venv
