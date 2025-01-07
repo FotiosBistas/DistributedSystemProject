@@ -84,9 +84,8 @@ class ObjectTracker:
                 self.track_id += 1
             return
 
-
         updated_tracking_objects = {}
-        matched_new_objects = []
+        matched_objects = [False] * len(center_points_x)
 
         for object_id, positions in self.tracking_objects.items(): 
 
@@ -100,22 +99,20 @@ class ObjectTracker:
 
             # Find the closest point within the threshold
             min_distance = np.min(distances)
-            best_match = np.argmin(distances) if min_distance < 1000 else None
+            best_match = np.argmin(distances) if min_distance < 50 else None
 
             if best_match is not None:
                 # Append the position of the tracked object as a new position
                 updated_tracking_objects[object_id] = positions + [np.array((center_points_x[best_match], center_points_y[best_match]))]
-                matched_new_objects.append(np.array((center_points_x[best_match], center_points_y[best_match])))
+                matched_objects[best_match] = True
 
-        for center_x, center_y in zip(center_points_x, center_points_y):
-            current_point = np.array([center_x, center_y])
-            if not any(np.array_equal(current_point, matched) for matched in matched_new_objects):
-                # Assign new IDs to unmatched detections
-                for position_x, position_y in zip(center_points_x, center_points_y):
-                    self.tracking_objects[self.track_id] = [np.array((position_x, position_y))]
-                    self.track_id += 1
-        
-        self.tracking_objects.update(updated_tracking_objects)
+        non_matched_centers = [np.array((center_x, center_y)) for (center_x, center_y), matched in zip(zip(center_points_x, center_points_y), matched_objects) if not matched] 
+        # Assign new IDs to unmatched detections
+        for arr in non_matched_centers:
+            updated_tracking_objects[self.track_id] = [arr]
+            self.track_id += 1
+
+        self.tracking_objects = updated_tracking_objects
 
     def detect_position(
         self, 
