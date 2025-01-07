@@ -208,5 +208,5 @@ if __name__ == "__main__":
     video_path = 'video.mp4'
     json_output_path = 'tracking_data.json'
 
-    tracker = ObjectTracker(2, should_visualize=True)
+    tracker = ObjectTracker(2, should_visualize=False)
     tracker(video_path, json_output_path)

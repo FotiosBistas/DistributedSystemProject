@@ -1,37 +1,34 @@
 import logging
+import tempfile
 import os
-import sys
 import azure.functions as func
-import cv2
 
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+from tracker_experimental import ObjectTracker
 
-
-app = func.FunctionApp() 
+app = func.FunctionApp()
 
 @app.blob_trigger(arg_name="myblob", path="input-segments-container",
                   connection="AzureWebJobsStorage")
 def video_processing(myblob: func.InputStream):
     logging.info(f"Object detection triggered for blob: {myblob.name}")
 
-    # Save the blob to a local file
-    temp_path = f"./temp/{myblob.name}"
-    os.makedirs(os.path.dirname(temp_path), exist_ok=True)
-    with open(temp_path, "wb") as temp_file:
-        temp_file.write(myblob.read())
+    temp_file_path = tempfile.gettempdir()
+    logging.info(f"Found {temp_file_path} directory")
+    # Extract just the file name from the blob name
+    blob_filename = os.path.basename(myblob.name)
+    temp_video_path = f"{temp_file_path}/{blob_filename}"
+    logging.info(f"Temp video path: {temp_video_path}")
 
-    logging.info(f"Performing object detection on {temp_path}")
+    with open(temp_video_path, "wb") as f:
+        f.write(myblob.read())
+    
+    tracker = ObjectTracker(green_line_indices=2, should_visualize=False)
 
-    # Dummy object detection logic
-    process_video(temp_path)
+    tracker(video_path=temp_video_path, json_output_path=f"{temp_video_path}/tracking_data.json")
 
-    # Clean up temporary file
-    os.remove(temp_path)
-    logging.info(f"Completed processing for {myblob.name}")
+    try: 
+        os.remove(temp_video_path)
+    except Exception as e:
+        logging.error(f"Unexpected error during cleanup: {e}", exc_info=True)
 
 
-def process_video(video_path):
-    # Replace this with your custom object detection logic
-    logging.info(f"Processing video at {video_path}")
-
-process_video("./temp")
