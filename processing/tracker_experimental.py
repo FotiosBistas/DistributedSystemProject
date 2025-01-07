@@ -29,15 +29,12 @@ class ObjectTracker:
         :param min_positions_detected: How many times should and object be detected in order to be considered valid
         """
         # self.green_line_indices = green_line_indices
-        self.min_positions_detected = min_positions_detected
         self.od = ObjectDetection()
         self.should_visualize = should_visualize
-        self.center_points_prev_frame = []
         self.tracking_objects = {}
-        self.track_id = 0
         self.vehicle_types = {}
         self.classes = {2: "car", 7: "truck"}
-        self.frame_count = 0
+        self.track_id = 0
 
         self.SCORE_THRESHOLD = 0.5
 
@@ -82,7 +79,6 @@ class ObjectTracker:
             # Assign new IDs to unmatched detections
             for i, (position_x, position_y) in enumerate(zip(center_points_x, center_points_y)):
                 self.tracking_objects[self.track_id] = [np.array((position_x, position_y))]
-
                 detected_class_id = class_ids[i]
                 if detected_class_id in self.classes:
                     self.vehicle_types[self.track_id] = self.classes[detected_class_id]
@@ -90,6 +86,7 @@ class ObjectTracker:
                     self.vehicle_types[self.track_id] = "unknown"  # Default for unidentified classes
 
                 self.track_id += 1
+
             return
 
         updated_tracking_objects = {}
@@ -108,11 +105,10 @@ class ObjectTracker:
 
             # Find the closest point within the threshold
             min_distance = np.min(distances)
-            best_match = np.argmin(distances) if min_distance < 20 else None
+            best_match = np.argmin(distances) if min_distance < 30 else None
 
             if best_match is not None:
                 # Append the position of the tracked object as a new position
-                #updated_tracking_objects[object_id] = positions + [np.array((center_points_x[best_match], center_points_y[best_match]))]
                 updated_tracking_objects[object_id] = [np.array((center_points_x[best_match], center_points_y[best_match]))]
                 matched_objects[best_match] = True
 
@@ -185,16 +181,11 @@ class ObjectTracker:
 
             center_points_x, center_points_y = self.detect_position(scores, boxes)
 
-            start_time = time.time()
             self.match_objects(
                 center_points_x=center_points_x,
                 center_points_y=center_points_y,
                 class_ids=class_ids,
             )
-            timer.stop()
-            # Print or log inference time
-            logging.debug(f"Inference Time: {time.time() - start_time} s")
-
 
             if self.should_visualize:
                 self.visualize(frame)
