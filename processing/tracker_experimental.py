@@ -98,7 +98,7 @@ class ObjectTracker:
 
             # Get the last known position of the object
             # Try to find a best match of the object in the current frame
-            last_position = positions
+            last_position = positions[-1]
             best_match = None
 
             distances = np.linalg.norm(current_centers - last_position, axis=1)
@@ -109,7 +109,7 @@ class ObjectTracker:
 
             if best_match is not None:
                 # Append the position of the tracked object as a new position
-                updated_tracking_objects[object_id] = [np.array((center_points_x[best_match], center_points_y[best_match]))]
+                updated_tracking_objects[object_id] = positions + [np.array((center_points_x[best_match], center_points_y[best_match]))]
                 matched_objects[best_match] = True
 
         # Assign new IDs to unmatched detections
@@ -181,11 +181,14 @@ class ObjectTracker:
 
             center_points_x, center_points_y = self.detect_position(scores, boxes)
 
+            start = time.time()
             self.match_objects(
                 center_points_x=center_points_x,
                 center_points_y=center_points_y,
                 class_ids=class_ids,
             )
+            end = time.time()
+            logging.debug(f"Time: {end-start}")
 
             if self.should_visualize:
                 self.visualize(frame)
