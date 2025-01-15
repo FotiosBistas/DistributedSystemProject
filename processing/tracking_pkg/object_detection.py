@@ -3,7 +3,7 @@ import logging
 import numpy as np
 
 class ObjectDetection:
-    def __init__(self, weights_path="yolo_files/yolov4.weights", cfg_path="yolo_files/yolov4.cfg"):
+    def __init__(self, weights_path="../yolo_files/yolov4.weights", cfg_path="../yolo_files/yolov4.cfg"):
         logging.info("Loading Object Detection")
         logging.info("Running opencv dnn with YOLOv4")
         self.nmsThreshold = 0.4
@@ -22,7 +22,7 @@ class ObjectDetection:
 
         self.model.setInputParams(size=(self.image_size, self.image_size), scale=1/255)
 
-    def load_class_names(self, classes_path="yolo_files/classes.txt"):
+    def load_class_names(self, classes_path="../yolo_files/classes.txt"):
 
         with open(classes_path, "r") as file_object:
             for class_name in file_object.readlines():
