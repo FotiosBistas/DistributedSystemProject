@@ -1,9 +1,7 @@
-from dotenv import dotenv_values
+import os
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import count
-
-# Load environment variables
-env_values = dotenv_values(dotenv_path="../.env")
 
 # Initialize Spark session
 spark = SparkSession \
@@ -15,26 +13,28 @@ spark = SparkSession \
     .master("local[*]") \
     .getOrCreate()
 
-# JDBC connection properties
-jdbc_url = f"jdbc:postgresql://distributed.postgres.database.azure.com:5432/postgres?user={env_values['PGUSER']}&password={env_values['PGPASSWORD']}&sslmode=require"
+# Database connection parameters
+db_url = f"jdbc:postgresql://{os.getenv('POSTGRES_HOST')}:{os.getenv('POSTGRES_PORT')}/{os.getenv('POSTGRES_DB')}"
 db_properties = {
-    "user": env_values["PGUSER"],
-    "password": env_values["PGPASSWORD"],
-    "driver": "org.postgresql.Driver",
-    "sslmode": "require"
+    "user": os.getenv("POSTGRES_USER"),
+    "password": os.getenv("POSTGRES_PASSWORD"),
+    "driver": "org.postgresql.Driver"
 }
 
 # Load data from PostgreSQL
 car_data_df = spark.read \
     .format("jdbc") \
-    .option("url", jdbc_url) \
-    .option("dbtable", "car_data") \
+    .option("url", db_url) \
+    .option("dbtable", "tracking_data") \
     .options(**db_properties) \
     .load()
 
+# Print schema for debugging
+car_data_df.printSchema()
+
 # Count vehicles per stream
-vehicle_count_df = car_data_df.groupBy("lane").agg(
-    count("vehicle_id").alias("vehicle_count")
+vehicle_count_df = car_data_df.groupBy("direction").agg(
+    count("id").alias("vehicle_count")
 )
 
 vehicle_count_df.show()
