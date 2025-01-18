@@ -111,6 +111,8 @@ venv.bak/
 # rope project settings
 .ropeproject
 
+.mp4
+
 # mkdocs documentation
 /site
 

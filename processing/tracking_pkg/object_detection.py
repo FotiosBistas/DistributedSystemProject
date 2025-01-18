@@ -12,8 +12,17 @@ class ObjectDetection:
 
         net = cv2.dnn.readNetFromDarknet(cfg_path, weights_path)
 
-        net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
-        net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+        #try:
+        #    # Attempt to use CUDA
+        #    net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA)
+        #    net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
+        #    logging.info("CUDA backend enabled.")
+        #except cv2.error as e:
+            # Fallback to CPU
+        logging.warning("CUDA initialization failed. Falling back to CPU.")
+        net.setPreferableBackend(cv2.dnn.DNN_BACKEND_DEFAULT)
+        net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
+
         self.model = cv2.dnn_DetectionModel(net)
 
         self.classes = []

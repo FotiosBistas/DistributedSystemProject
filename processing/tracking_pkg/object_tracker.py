@@ -1,10 +1,9 @@
 import cv2
 import logging
 import numpy as np
-from vehicle_utils import prepare_tracking_data
-import time
-from db import DBHandler
-from object_detection import ObjectDetection
+
+from .db import DBHandler
+from .object_detection import ObjectDetection
 
 DEBUG_MODE = True
 
@@ -23,7 +22,12 @@ else:
 
 
 class ObjectTracker:
-    def __init__(self, green_line_indices, min_positions_detected: int = 3, should_visualize: bool = False):
+    def __init__(
+        self, 
+        min_positions_detected: int = 3, 
+        should_visualize: bool = False,
+        log_to_database: bool = True,
+    ):
         """
         :param green_line_indices: In what area of the frame should the tracking be implemented
         :param should_visualize: Visualize the object tracking defaults
@@ -31,7 +35,10 @@ class ObjectTracker:
         """
         # self.green_line_indices = green_line_indices
         self.od = ObjectDetection()
-        self.db_handler = DBHandler()
+        # start a deamon thread in the background
+        if log_to_database:
+            self.db_handler = DBHandler()
+        self.log_to_database = log_to_database
         self.should_visualize = should_visualize
         self.tracking_objects = {}
         self.vehicle_types = {}
@@ -133,6 +140,11 @@ class ObjectTracker:
 
                 self.track_id = (self.track_id + 1) % 200
 
+        # Don't log to database and just return
+        if not self.log_to_database:
+            self.tracking_objects = updated_tracking_objects
+            return
+
         # Find the inactive objects and fill up a dictionary of them.
         # After a certain amount of time send them to be written into the db
         for object_id in self.tracking_objects.keys():
@@ -176,7 +188,6 @@ class ObjectTracker:
 
     def process_video(self, video_path: str):
 
-        timer = cv2.TickMeter()
         self.cap = cv2.VideoCapture(video_path)
 
         while True:
@@ -197,14 +208,11 @@ class ObjectTracker:
 
             center_points_x, center_points_y = self.detect_position(scores, boxes)
 
-            start = time.time()
             self.match_objects(
                 center_points_x=center_points_x,
                 center_points_y=center_points_y,
                 class_ids=class_ids,
             )
-            end = time.time()
-            logging.debug(f"Time: {end - start}")
 
             if self.should_visualize:
                 self.visualize(frame)
@@ -215,14 +223,13 @@ class ObjectTracker:
         self.cap.release()
         cv2.destroyAllWindows()
 
-    def __call__(self, video_path: str, json_output_path: str):
+    def __call__(self, video_path: str):
         self.process_video(video_path)
 
 
 
 if __name__ == "__main__":
-    video_path = '../video.mp4'
-    json_output_path = '../tracking_data.json'
+    video_path = './video.mp4'
 
-    tracker = ObjectTracker(2, should_visualize=True)
-    tracker(video_path, json_output_path)
+    tracker = ObjectTracker(should_visualize=False, log_to_database=False)
+    tracker(video_path)

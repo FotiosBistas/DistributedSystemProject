@@ -3,6 +3,7 @@
 # Manually managing azure-functions-worker may cause unexpected issues
 
 azure-functions
-#azurefunctions-extensions-bindings-blob
+psycopg2
+numpy
 opencv-python-headless
 

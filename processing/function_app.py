@@ -3,7 +3,7 @@ import tempfile
 import os
 import azure.functions as func
 
-from tracker_experimental import ObjectTracker
+from tracking_pkg import Tracker
 
 app = func.FunctionApp()
 
@@ -22,9 +22,9 @@ def video_processing(myblob: func.InputStream):
     with open(temp_video_path, "wb") as f:
         f.write(myblob.read())
     
-    tracker = ObjectTracker(green_line_indices=2, should_visualize=False)
+    tracker = Tracker(should_visualize=False)
 
-    tracker(video_path=temp_video_path, json_output_path=f"{temp_video_path}/tracking_data.json")
+    tracker(video_path=temp_video_path)
 
     try: 
         os.remove(temp_video_path)
@@ -32,3 +32,5 @@ def video_processing(myblob: func.InputStream):
         logging.error(f"Unexpected error during cleanup: {e}", exc_info=True)
 
 
+
+print("test")
