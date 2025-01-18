@@ -4,6 +4,7 @@ import numpy as np
 
 from .db import DBHandler
 from .object_detection import ObjectDetection
+from .vehicle_utils import determine_direction
 
 DEBUG_MODE = True
 
@@ -64,7 +65,7 @@ class ObjectTracker:
             w, h = 50, 50
             cv2.rectangle(frame, (x - w // 2, y - h // 2), (x + w // 2, y + h // 2), (0, 255, 0), 2)
 
-            label = f"ID: {object_id} {vehicle_type}"
+            label = f"ID: {object_id} {vehicle_type} {determine_direction(positions=positions)}"
             cv2.putText(frame, label, (x - w // 2, y - h // 2 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         cv2.imshow("Object Tracking", frame)
