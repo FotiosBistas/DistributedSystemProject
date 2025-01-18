@@ -138,7 +138,7 @@ class ObjectTracker:
                 else:
                     self.vehicle_types[self.track_id] = "unknown"  # Default for unidentified classes
 
-                self.track_id = (self.track_id + 1) % 200
+                self.track_id = (self.track_id + 1) % 1000
 
         # Don't log to database and just return
         if not self.log_to_database:
@@ -229,7 +229,7 @@ class ObjectTracker:
 
 
 if __name__ == "__main__":
-    video_path = './video.mp4'
+    video_path = './chunk_120-240.mp4'
 
     tracker = ObjectTracker(should_visualize=False, log_to_database=False)
     tracker(video_path)

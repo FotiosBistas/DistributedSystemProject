@@ -31,6 +31,3 @@ def video_processing(myblob: func.InputStream):
     except Exception as e:
         logging.error(f"Unexpected error during cleanup: {e}", exc_info=True)
 
-
-
-print("test")
