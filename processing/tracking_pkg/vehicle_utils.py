@@ -107,6 +107,7 @@ def prepare_tracking_data(object_id, positions, vehicle_types):
     log_speed_alert(object_id, vehicle_types.get(object_id, "unknown"), speed)
 
     return {
+        "vehicle_id": object_id,
         "vehicle_type": vehicle_types.get(object_id, "unknown"),
         "direction": direction,
         "speed": speed,

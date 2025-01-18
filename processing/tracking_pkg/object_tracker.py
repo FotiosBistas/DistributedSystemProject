@@ -138,7 +138,7 @@ class ObjectTracker:
                 else:
                     self.vehicle_types[self.track_id] = "unknown"  # Default for unidentified classes
 
-                self.track_id = (self.track_id + 1) % 1000
+                self.track_id = (self.track_id + 1) % 32767
 
         # Don't log to database and just return
         if not self.log_to_database:

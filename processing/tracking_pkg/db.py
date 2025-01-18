@@ -43,10 +43,11 @@ class DBHandler:
         """
         create_table_query = """
         CREATE TABLE IF NOT EXISTS tracking_data (
-            id SERIAL PRIMARY KEY,
+            id SMALLSERIAL,
             vehicle_type VARCHAR(50),
             direction VARCHAR(50),
-            speed FLOAT
+            speed FLOAT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
         """
         connection = None
