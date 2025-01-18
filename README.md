@@ -84,3 +84,30 @@ Select the desired image and registry.
 You should be able to see it running in the overview: 
 
 ![](./images/function_app_overview.png "")
+
+# Running the files with environment variables 
+
+If you are planning to run a simple python file: 
+
+```
+POSTGRES_HOST=localhost POSTGRES_PORT=5432 POSTGRES_DB=your_db POSTGRES_USER=your_user POSTGRES_PASSWORD=your_password python create_log_file.py
+```
+
+
+If you are running a function app, ensure the `local.settings.json` contains: 
+
+```
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage":"connection_string",
+    "POSTGRES_HOST": "localhost",
+    "POSTGRES_PORT": "5432",
+    "POSTGRES_DB": "your_db",
+    "POSTGRES_USER": "your_user",
+    "POSTGRES_PASSWORD": "your_password"
+  },
+  "ConnectionStrings": {}
+}
+```
