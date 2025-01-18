@@ -1,52 +1,58 @@
+import os
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, count, window
-from dotenv import dotenv_values
-
-# Load environment variables
-env_values = dotenv_values(dotenv_path="../.env")
+from pyspark.sql.functions import window, count
+from pyspark.sql.functions import to_timestamp
 
 # Initialize Spark session
 spark = SparkSession \
     .builder \
-    .appName("Vehicles Per Stream and 5 Minutes") \
+    .appName("Vehicle Count Per 5-Second Interval") \
     .config("spark.streaming.stopGracefullyOnShutdown", True) \
     .config('spark.jars.packages', 'org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0,org.postgresql:postgresql:42.7.4') \
     .config("spark.sql.shuffle.partitions", 4) \
     .master("local[*]") \
     .getOrCreate()
 
-# JDBC connection properties
-jdbc_url = f"jdbc:postgresql://distributed.postgres.database.azure.com:5432/postgres?user={env_values['PGUSER']}&password={env_values['PGPASSWORD']}&sslmode=require"
+# Database connection parameters
+db_url = f"jdbc:postgresql://{os.getenv('POSTGRES_HOST', 'localhost')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB', 'default_db')}"
 db_properties = {
-    "user": env_values["PGUSER"],
-    "password": env_values["PGPASSWORD"],
-    "driver": "org.postgresql.Driver",
-    "sslmode": "require"
+    "user": os.getenv("POSTGRES_USER", "default_user"),
+    "password": os.getenv("POSTGRES_PASSWORD", "default_password"),
+    "driver": "org.postgresql.Driver"
 }
 
 # Load data from PostgreSQL
 car_data_df = spark.read \
     .format("jdbc") \
-    .option("url", jdbc_url) \
-    .option("dbtable", "car_data") \
+    .option("url", db_url) \
+    .option("dbtable", "tracking_data") \
     .options(**db_properties) \
     .load()
 
-# Convert timestamps to Spark's TimestampType
-# No need to divide by 1000 since the timestamp is in seconds
-car_data_df = car_data_df.withColumn("timestamp", col("timestamp").cast("timestamp"))
+# Print schema to verify the structure
+car_data_df.printSchema()
 
-# Group data by stream and 5-minute windows, and count vehicles
-vehicles_per_stream_df = car_data_df.groupBy(
-    window(col("timestamp"), "5 minutes"),  # 5-minute windows
-    col("lane")  # Stream direction: inbound, outbound
+# Ensure the timestamp column is in Spark's TimestampType
+car_data_df = car_data_df.withColumn("timestamp", to_timestamp("timestamp"))
+
+# Group by 5-second window and direction
+vehicle_count_df = car_data_df.groupBy(
+    window(car_data_df["timestamp"], "5 minutes"),
+    car_data_df["direction"]
 ).agg(
-    count("vehicle_id").alias("vehicle_count")  # Count vehicles
-).select(
-    col("window.start").alias("start_time"),
-    col("window.end").alias("end_time"),
-    col("lane"),
-    col("vehicle_count")
+    count("id").alias("vehicle_count")
 )
 
-vehicles_per_stream_df.show(truncate=False)
+# Select and format the result
+result_df = vehicle_count_df.select(
+    vehicle_count_df["window.start"].alias("start_time"),
+    vehicle_count_df["window.end"].alias("end_time"),
+    vehicle_count_df["direction"],
+    vehicle_count_df["vehicle_count"]
+).orderBy("start_time", "direction")
+
+# Show the result
+result_df.show(truncate=False)
+
+# Stop the Spark session
+spark.stop()
