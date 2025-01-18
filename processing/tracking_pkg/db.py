@@ -5,6 +5,13 @@ import queue
 import logging
 from vehicle_utils import prepare_tracking_data
 
+db_params = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "mydatabase",
+    "user": "myuser",
+    "password": "mypassword"
+}
 
 class DBHandler:
     def __init__(self, batch_size: int = 16):
@@ -83,7 +90,8 @@ class DBHandler:
 
         if len(positions) > min_positions_detected:
             data = prepare_tracking_data(object_id, positions, vehicle_types=vehicle_types)
-            self.queue.put(data)
+            if data is not None:
+                self.queue.put(data)
 
     def stop(self):
         """

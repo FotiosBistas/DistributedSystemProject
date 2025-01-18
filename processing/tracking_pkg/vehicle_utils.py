@@ -2,15 +2,66 @@ import numpy as np
 import logging
 
 
-def calculate_speed(positions: list[np.ndarray], pixel_to_meter_ratio = 1.0, time_to_frame_ratio = 1/25) -> float:
+def calculate_speed(positions: list[np.ndarray], direction, time_to_frame_ratio = 1/25.0) -> float:
     """
     Calculate the speed of the object based on its positions over time.
+    :param direction: inbound or outbound, cause of perspective we need different pixel to meter ratio
+    :param time_to_frame_ratio:
     :param positions: List of coordinates representing the tracked object's path.
-    :param pixel_to_meter_ratio:
-    :param time_per_frame: relative time
     :return: Calculated speed in km/h.
     """
-    return float(round(np.linalg.norm(positions[0] - positions[-1] * pixel_to_meter_ratio) / (len(positions) * time_to_frame_ratio), 4))
+
+    if direction == 'outbound':
+        pixel_ratio = 0.18
+    else:
+        pixel_ratio = 0.09
+
+
+    # Euclidean distance traveled scaled by the pixel to meter ratio
+    numerator = np.linalg.norm(positions[0] - positions[-1], ord = 2) * pixel_ratio
+
+    # Time given the fps and the number of frames that the object was detected
+    denominator = (len(positions)) * time_to_frame_ratio
+
+    # Convert them into km/h
+    speed = (numerator / denominator) * 3.6
+
+    return float(round(speed, 1))
+
+def calculate_angle(positions: list[np.ndarray]) -> float:
+    vector = positions[0] - positions[-1]
+
+    angle = np.arctan2(vector[1], vector[0])
+    return angle
+
+
+def lower_line(x: float):
+    return 1/73 * x + 38255 /71
+
+def upper_line(x: float):
+    return 3/145 * x + 12033/29
+
+def find_positions_inside_green_line_indices(positions: list[np.ndarray]) -> list[np.ndarray]:
+    """
+    :param positions: the list with the tracked positions
+    :param lower_bound: the y-coordinate's lower bound
+    :param upper_bound: the y-coordinate's upper bound'
+    :return: list[np.ndarray] with the positions only inside the bounding box
+    """
+    bounding_box_positions = []
+
+
+    for position in positions:
+        x, y = position
+        # lim_low = lower_line(x)
+        # lim_up = upper_line(x)
+
+        if 420 <= y <= 550:
+            bounding_box_positions.append(position)
+        else:
+            continue
+    return bounding_box_positions
+
 
 
 def determine_direction(positions: list[np.ndarray]) -> str:
@@ -43,8 +94,16 @@ def prepare_tracking_data(object_id, positions, vehicle_types):
     :param vehicle_types: dict with the truck or car of the vehicles.
     :return: A dictionary with tracking data.
     """
+
     direction = determine_direction(positions)
-    speed = calculate_speed(positions)
+    positions = find_positions_inside_green_line_indices(positions)
+
+
+    if len(positions) < 2:
+        return None
+
+
+    speed = calculate_speed(positions, direction)
     log_speed_alert(object_id, vehicle_types.get(object_id, "unknown"), speed)
 
     return {
