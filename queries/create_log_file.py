@@ -1,78 +1,72 @@
-import logging
-from dotenv import dotenv_values
+import os
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, avg, window
-
-# Load environment variables
-env_values = dotenv_values(dotenv_path="../.env")
+from pyspark.sql.functions import window, avg, col, lit
 
 # Initialize Spark session
 spark = SparkSession \
     .builder \
-    .appName("Create log file") \
+    .appName("Average Speed Per Stream Per 5-Minutes") \
     .config("spark.streaming.stopGracefullyOnShutdown", True) \
     .config('spark.jars.packages', 'org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0,org.postgresql:postgresql:42.7.4') \
     .config("spark.sql.shuffle.partitions", 4) \
     .master("local[*]") \
     .getOrCreate()
 
-# JDBC connection properties
-jdbc_url = f"jdbc:postgresql://distributed.postgres.database.azure.com:5432/postgres?user={env_values['PGUSER']}&password={env_values['PGPASSWORD']}&sslmode=require"
+# Database connection parameters
+db_url = f"jdbc:postgresql://{os.getenv('POSTGRES_HOST', 'localhost')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB', 'default_db')}"
 db_properties = {
-    "user": env_values["PGUSER"],
-    "password": env_values["PGPASSWORD"],
-    "driver": "org.postgresql.Driver",
-    "sslmode": "require"
+    "user": os.getenv("POSTGRES_USER", "default_user"),
+    "password": os.getenv("POSTGRES_PASSWORD", "default_password"),
+    "driver": "org.postgresql.Driver"
 }
 
 # Load data from PostgreSQL
 car_data_df = spark.read \
     .format("jdbc") \
-    .option("url", jdbc_url) \
-    .option("dbtable", "car_data") \
+    .option("url", db_url) \
+    .option("dbtable", "tracking_data") \
     .options(**db_properties) \
     .load()
 
-# Do not divide by 1000 since the timestamps must be in seconds
-car_data_df = car_data_df.withColumn("timestamp", col("timestamp").cast("timestamp"))
+# Print schema to verify the structure
+car_data_df.printSchema()
 
-average_speed_df = car_data_df.groupBy(
-    window(col("timestamp"), "1 minutes"),  
-    col("lane")  # Stream direction: inbound, outbound
+# Ensure the timestamp column is in Spark's TimestampType
+from pyspark.sql.functions import to_timestamp
+car_data_df = car_data_df.withColumn("timestamp", to_timestamp("timestamp"))
+
+# Group by 5-minute window and direction, calculate average speed
+avg_speed_df = car_data_df.groupBy(
+    window(car_data_df["timestamp"], "5 minutes"),
+    car_data_df["direction"]
 ).agg(
     avg("speed").alias("average_speed")
-).select(
-    col("window.start").alias("start_time"),
-    col("window.end").alias("end_time"),
-    col("lane"),
+)
+
+# Add Nth 5-minute interval numbering for continuous indexing
+from pyspark.sql.window import Window
+from pyspark.sql.functions import row_number
+
+# Create a row number per direction to represent the 5-minute interval
+interval_window = Window.partitionBy("direction").orderBy("window.start")
+avg_speed_with_index = avg_speed_df.withColumn("interval_index", row_number().over(interval_window))
+
+# Select and format the result
+formatted_result_df = avg_speed_with_index.select(
+    col("direction"),
+    col("interval_index").alias("5min_interval"),
     col("average_speed")
-)
+).orderBy("5min_interval", "direction")
 
-# Set up logging
-logging.basicConfig(
-    filename="traffic_speed_log.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-)
+# Write results to a log file in the desired format
+log_file_path = "average_speed_per_stream.log"
+with open(log_file_path, "w") as log_file:
+    for row in formatted_result_df.collect():
+        # Format Nth interval with ordinal suffix (1st, 2nd, 3rd, etc.)
+        interval_suffix = f"{row['5min_interval']}{'th' if 11 <= row['5min_interval'] % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(row['5min_interval'] % 10, 'th')}"
+        log_entry = f"({row['direction']}, {interval_suffix} 5min, {row['average_speed']:.2f} km/h)\n"
+        log_file.write(log_entry)
 
-# Map 5-minute intervals to ordinal labels
-def get_ordinal_interval(index):
-    ordinals = ["1st", "2nd", "3rd"] + [f"{i}th" for i in range(4, 21)]
-    return ordinals[index % len(ordinals)]  # Cycle through ordinals if needed
 
-# Collect results and log them
-average_speed_logs = average_speed_df.collect()
-
-interval_start = min([row["start_time"] for row in average_speed_logs])  # Starting time
-for row in average_speed_logs:
-    lane = row["lane"]  # inbound or outbound
-    start_time = row["start_time"]
-    avg_speed = round(row["average_speed"], 2)
-
-    # Calculate the interval number
-    interval_number = int((start_time - interval_start).total_seconds() / 300) + 1
-    ordinal_interval = get_ordinal_interval(interval_number)
-
-    # Log the message
-    logging.info(f"({lane}, {ordinal_interval} 5min, {avg_speed} kmh)")
+# Stop the Spark session
+spark.stop()
