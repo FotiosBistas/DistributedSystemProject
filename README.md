@@ -55,7 +55,16 @@ docker build -t <image_name:tag> --name <container_registry_name> ./
 Check if it runs correctly locally: 
 
 ```
-docker run -e AzureWebJobsStorage=<value> -p 8080:80 <image_name:tag> 
+docker run -p 8080:80 \
+    -e AzureWebJobsStorage="UseDevelopmentStorage=true" \
+    -e FUNCTIONS_WORKER_RUNTIME="python" \
+    -e POSTGRES_HOST="localhost" \
+    -e POSTGRES_PORT="5432" \
+    -e POSTGRES_DB="your_db" \
+    -e POSTGRES_USER="your_user" \
+    -e POSTGRES_PASSWORD="your_password" \
+    function-app
+
 ```
 
 Push the image to the cloud: 
