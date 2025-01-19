@@ -4,6 +4,7 @@
 
 azure-functions
 psycopg2
+psycopg2-binary
 numpy
 opencv-python-headless
 
