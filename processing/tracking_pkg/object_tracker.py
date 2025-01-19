@@ -221,8 +221,9 @@ class ObjectTracker:
                 if key == 27:
                     break
 
+                cv2.destroyAllWindows()
+
         self.cap.release()
-        cv2.destroyAllWindows()
 
     def __call__(self, video_path: str):
         self.process_video(video_path)
