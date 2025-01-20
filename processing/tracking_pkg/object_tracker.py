@@ -188,44 +188,70 @@ class ObjectTracker:
         return center_points_x, center_points_y
 
     def process_video(self, video_path: str):
+        """
+        Processes the video, applies preprocessing, and performs object detection.
+        """
 
-        self.cap = cv2.VideoCapture(video_path)
+        try:
+            self.cap = cv2.VideoCapture(video_path)
+            if not self.cap.isOpened():
+                logging.error(f"Failed to open video file: {video_path}")
+                return
 
-        while True:
-            ret, frame = self.cap.read()
-            if not ret:
-                break
-
-            # Convert the frame to grayscale
-            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-
-            # Replicate the grayscale channel into 3 channels
-            gray_frame_3channel = cv2.merge([gray_frame, gray_frame, gray_frame])
-
-            # Apply Gaussian blur
-            frame = cv2.GaussianBlur(gray_frame_3channel, (15, 15), 0)
-
-            class_ids, scores, boxes = self.od.detect(frame)
-
-            center_points_x, center_points_y = self.detect_position(scores, boxes)
-
-            self.match_objects(
-                center_points_x=center_points_x,
-                center_points_y=center_points_y,
-                class_ids=class_ids,
-            )
-
-            if self.should_visualize:
-                self.visualize(frame)
-                key = cv2.waitKey(1)
-                if key == 27:
+            while True:
+                ret, frame = self.cap.read()
+                if not ret:
+                    logging.info("End of video or failed to read frame.")
                     break
 
-        
-        if self.should_visualize:
-            cv2.destroyAllWindows()
+                if frame.size == 0:
+                    logging.warning("Empty or invalid frame detected. Skipping.")
+                    continue
 
-        self.cap.release()
+                try:
+                    # Convert the frame to grayscale
+                    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+                    # Replicate the grayscale channel into 3 channels (if required)
+                    gray_frame_3channel = cv2.merge([gray_frame, gray_frame, gray_frame])
+
+                    # Apply Gaussian blur
+                    processed_frame = cv2.GaussianBlur(gray_frame_3channel, (15, 15), 0)
+
+                    # Perform object detection
+                    class_ids, scores, boxes = self.od.detect(processed_frame)
+
+                    # Detect object positions
+                    center_points_x, center_points_y = self.detect_position(scores, boxes)
+
+                    # Match objects
+                    self.match_objects(
+                        center_points_x=center_points_x,
+                        center_points_y=center_points_y,
+                        class_ids=class_ids,
+                    )
+
+                    # Visualize if required
+                    if self.should_visualize:
+                        self.visualize(frame)
+                        key = cv2.waitKey(1)
+                        if key == 27:  # ESC key to exit visualization
+                            break
+
+                except Exception as e:
+                    logging.error(f"Error processing frame: {e}", exc_info=True)
+                    continue
+
+        except Exception as e:
+            logging.error(f"Critical error processing video: {e}", exc_info=True)
+
+        finally:
+            # Cleanup resources
+            if self.cap:
+                self.cap.release()
+            if self.should_visualize:
+                cv2.destroyAllWindows()
+
 
     def __call__(self, video_path: str):
         self.process_video(video_path)
