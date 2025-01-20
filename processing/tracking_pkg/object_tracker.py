@@ -221,7 +221,9 @@ class ObjectTracker:
                 if key == 27:
                     break
 
-                cv2.destroyAllWindows()
+        
+        if self.should_visualize:
+            cv2.destroyAllWindows()
 
         self.cap.release()
 

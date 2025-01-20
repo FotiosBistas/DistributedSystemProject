@@ -47,7 +47,8 @@ class DBHandler:
             vehicle_type VARCHAR(50),
             direction VARCHAR(50),
             speed FLOAT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id, timestamp)
         );
         """
         connection = None
@@ -65,6 +66,7 @@ class DBHandler:
                 cursor.close()
             if connection:
                 connection.close()
+
 
     def _write_batch(self, batch: list):
         """

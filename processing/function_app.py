@@ -5,6 +5,9 @@ import azure.functions as func
 
 from tracking_pkg import Tracker
 
+# Use a global tracker
+tracker = Tracker(should_visualize=True)
+
 app = func.FunctionApp()
 
 @app.blob_trigger(arg_name="myblob", path="input-segments-container",
@@ -22,8 +25,6 @@ def video_processing(myblob: func.InputStream):
     with open(temp_video_path, "wb") as f:
         f.write(myblob.read())
     
-    tracker = Tracker(should_visualize=False)
-
     tracker(video_path=temp_video_path)
 
     try: 
