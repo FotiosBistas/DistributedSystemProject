@@ -3,6 +3,7 @@
 # Manually managing azure-functions-worker may cause unexpected issues
 
 azure-functions
+azure-storage-blob
 psycopg2-binary
 #psycopg2
 numpy
