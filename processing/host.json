@@ -10,8 +10,8 @@
   },
   "extensions": {
     "blobs": {
-        "maxDegreeOfParallelism": 2,
-        "poisonBlobThreshold": 1
+        "maxDegreeOfParallelism": 1,
+        "poisonBlobThreshold": 3
     }
   },
   "extensionBundle": {
