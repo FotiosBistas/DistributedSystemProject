@@ -8,11 +8,10 @@ def process_videos_in_directory(directory_path, should_visualize=False):
     :param directory_path: Path to the directory containing video files.
     :param should_visualize: Flag to indicate if visualization should be enabled.
     """
-    tracker = Tracker(should_visualize=should_visualize)
 
     for file_name in os.listdir(directory_path):
         file_path = os.path.join(directory_path, file_name)
-
+        tracker = Tracker(should_visualize=should_visualize)
 
         if os.path.isfile(file_path) and file_name.lower().endswith(('.mp4', '.avi', '.mov', '.mkv')):
             print(f"Starting tracking for: {file_name}")
