@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import numpy as np
 import logging
 
@@ -85,8 +87,25 @@ def log_speed_alert(object_id: int, vehicle_type: str, speed: float):
             f"Speed Alert: Vehicle {object_id} ({vehicle_type}) detected with speed {speed:.2f} km/h."
         )
 
+def calculate_time(timestamp, frame_count, num_frames):
+    """
+    :param timestamp: The timestamp of the frame as it was parsed from the chunk's name
+    :param frame_count: The number of the frame the object was last detected
+    :param num_frames:  For how many frames the object was detected
+    :return: The timestamp of the first detected frame
+    """
 
-def prepare_tracking_data(object_id, positions, vehicle_types):
+    # We calculate the time of tracking by subtracting numbers of detections from the last frame's number
+    # Thus giving us the elapsed time. Then we add it to the chunk's timestamp
+    parsed_time = datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
+    elapsed_time = (frame_count - num_frames) / 25.0
+    new_time = parsed_time + timedelta(seconds=elapsed_time)
+
+    return new_time.strftime("%Y-%m-%d %H:%M:%S")
+
+
+
+def prepare_tracking_data(object_id, positions, timestamp, frame_count, vehicle_types):
     """
     Prepare tracking data for database entry.
     :param object_id: The ID of the tracked object.
@@ -94,7 +113,7 @@ def prepare_tracking_data(object_id, positions, vehicle_types):
     :param vehicle_types: dict with the truck or car of the vehicles.
     :return: A dictionary with tracking data.
     """
-
+    timestamp = calculate_time(timestamp, frame_count, len(positions))
     direction = determine_direction(positions)
     positions = find_positions_inside_green_line_indices(positions)
 
@@ -111,4 +130,5 @@ def prepare_tracking_data(object_id, positions, vehicle_types):
         "vehicle_type": vehicle_types.get(object_id, "unknown"),
         "direction": direction,
         "speed": speed,
+        "timestamp": timestamp
     }
