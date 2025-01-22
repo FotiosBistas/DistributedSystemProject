@@ -15,6 +15,7 @@ db_params = {
     "password": os.getenv("POSTGRES_PASSWORD"),
 }
 
+
 class DBHandler:
     def __init__(self, batch_size: int = 16):
         """
@@ -47,7 +48,7 @@ class DBHandler:
             vehicle_type VARCHAR(50),
             direction VARCHAR(50),
             speed FLOAT,
-            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            timestamp TIMESTAMP NOT NULL,
             PRIMARY KEY (id, timestamp)
         );
         """
@@ -79,9 +80,9 @@ class DBHandler:
             connection = self._connect()
             cursor = connection.cursor()
 
-            insert_query = "INSERT INTO tracking_data (vehicle_type, direction, speed) VALUES (%s, %s, %s);"
+            insert_query = "INSERT INTO tracking_data (vehicle_type, direction, speed, timestamp) VALUES (%s, %s, %s, %s);"
             for data in batch:
-                cursor.execute(insert_query, (data['vehicle_type'], data['direction'], data['speed']))
+                cursor.execute(insert_query, (data['vehicle_type'], data['direction'], data['speed'], data['timestamp']))
 
             connection.commit()
             logging.info("Batch written to DB successfully.")
@@ -114,7 +115,7 @@ class DBHandler:
 
         logging.info("DBHandler background thread stopped.")
 
-    def prepare_and_add_to_queue(self, object_id: dict, positions: list[np.ndarray], vehicle_types: dict, min_positions_detected=3):
+    def prepare_and_add_to_queue(self, object_id: dict, positions: list[np.ndarray], vehicle_types: dict, timestamp, frame_count, min_positions_detected=3):
         """
         Prepare tracking data for a specific object and add it to the queue.
         :param object_id: ID of the tracked object.
@@ -122,7 +123,7 @@ class DBHandler:
         :param vehicle_types: Dictionary mapping object IDs to vehicle types.
         """
         if len(positions) > min_positions_detected:
-            data = prepare_tracking_data(object_id, positions, vehicle_types=vehicle_types)
+            data = prepare_tracking_data(object_id, positions, timestamp, frame_count, vehicle_types=vehicle_types)
             if data is not None:
                 self.queue.put(data)
 
