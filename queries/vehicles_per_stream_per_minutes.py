@@ -1,19 +1,20 @@
 import os
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import window, count
+import pyspark.sql.functions as F
 from pyspark.sql.functions import to_timestamp
 
-# Initialize Spark session
+# 1. Initialize Spark session
 spark = SparkSession \
     .builder \
-    .appName("Vehicle Count Per 5-Second Interval") \
+    .appName("Vehicle Count by Hour:Minute:Second Summed Across Dates") \
     .config("spark.streaming.stopGracefullyOnShutdown", True) \
-    .config('spark.jars.packages', 'org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0,org.postgresql:postgresql:42.7.4') \
+    .config('spark.jars.packages',
+            'org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0,org.postgresql:postgresql:42.7.4') \
     .config("spark.sql.shuffle.partitions", 4) \
     .master("local[*]") \
     .getOrCreate()
 
-# Database connection parameters
+# 2. Database connection parameters
 db_url = f"jdbc:postgresql://{os.getenv('POSTGRES_HOST', 'localhost')}:{os.getenv('POSTGRES_PORT', '5432')}/{os.getenv('POSTGRES_DB', 'default_db')}"
 db_properties = {
     "user": os.getenv("POSTGRES_USER", "default_user"),
@@ -21,38 +22,61 @@ db_properties = {
     "driver": "org.postgresql.Driver"
 }
 
-# Load data from PostgreSQL
-car_data_df = spark.read \
-    .format("jdbc") \
-    .option("url", db_url) \
-    .option("dbtable", "tracking_data") \
-    .options(**db_properties) \
+# 3. Load data from PostgreSQL
+car_data_df = (
+    spark.read
+    .format("jdbc")
+    .option("url", db_url)
+    .option("dbtable", "tracking_data")
+    .options(**db_properties)
     .load()
-
-# Print schema to verify the structure
-car_data_df.printSchema()
-
-# Ensure the timestamp column is in Spark's TimestampType
-car_data_df = car_data_df.withColumn("timestamp", to_timestamp("timestamp"))
-
-# Group by 5-second window and direction
-vehicle_count_df = car_data_df.groupBy(
-    window(car_data_df["timestamp"], "5 minutes"),
-    car_data_df["direction"]
-).agg(
-    count("id").alias("vehicle_count")
 )
 
-# Select and format the result
-result_df = vehicle_count_df.select(
-    vehicle_count_df["window.start"].alias("start_time"),
-    vehicle_count_df["window.end"].alias("end_time"),
-    vehicle_count_df["direction"],
-    vehicle_count_df["vehicle_count"]
-).orderBy("start_time", "direction")
+# Convert 'timestamp' column to Spark TimestampType
+car_data_df = car_data_df.withColumn("timestamp", to_timestamp("timestamp"))
 
-# Show the result
-result_df.show(truncate=False)
+# Step A: Group by date + 5-minute window + direction, count vehicles
+count_df = (
+    car_data_df
+    .withColumn("date", F.to_date("timestamp")) 
+    .groupBy(
+        F.col("date"),
+        F.window("timestamp", "5 minutes").alias("time_window"),
+        F.col("direction")
+    )
+    .agg(F.count("id").alias("count"))
+)
 
-# Stop the Spark session
+# (B) Extract hour, minute, second from the window start time
+count_with_hms = (
+    count_df
+    .withColumn("hour",   F.hour(F.col("time_window.start")))
+    .withColumn("minute", F.minute(F.col("time_window.start")))
+    .withColumn("second", F.second(F.col("time_window.start")))
+)
+
+# (C) Re-group by (hour, minute, second, direction) to combine across dates
+#     and sum the counts.
+agg_hms_df = (
+    count_with_hms
+    .groupBy("hour", "minute", "second", "direction")
+    .agg(F.sum("count").alias("total_count"))
+)
+
+# (D) Create a single `hh:mm:ss` string column
+agg_hms_df = agg_hms_df.withColumn(
+    "timestamp",
+    F.format_string("%02d:%02d:%02d", F.col("hour"), F.col("minute"), F.col("second"))
+)
+
+# (E) Select final columns and sort
+result_df = agg_hms_df.select(
+    "timestamp",      # The final column with `HH:mm:ss` format
+    "direction",
+    "total_count"
+).orderBy("timestamp", "direction")
+
+# Show final result
+result_df.show(200, truncate=False)
+
 spark.stop()
