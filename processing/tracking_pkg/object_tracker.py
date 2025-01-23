@@ -1,10 +1,14 @@
+from datetime import date, datetime
+
 import cv2
 import logging
 import numpy as np
+import re
 
 from .db import DBHandler
 from .object_detection import ObjectDetection
 from .vehicle_utils import determine_direction
+
 
 DEBUG_MODE = True
 
@@ -50,6 +54,8 @@ class ObjectTracker:
         self.checkpoint_counter = 0
         self.BATCH_SIZE_DB = 16
         self.SCORE_THRESHOLD = 0.5
+        self.timestamp = None
+        self.frame_count = 0
 
 
     def visualize(self, frame):
@@ -152,7 +158,7 @@ class ObjectTracker:
             # If the object is not the updated dictionary, that means that has become inactive.
             # No more new positions are going to be detected, thus it can be written to the DB and be processed for rta
             if object_id not in updated_tracking_objects:
-                self.db_handler.prepare_and_add_to_queue(object_id, self.tracking_objects[object_id], self.vehicle_types)
+                self.db_handler.prepare_and_add_to_queue(object_id, self.tracking_objects[object_id], self.vehicle_types, self.timestamp, self.frame_count)
 
         self.tracking_objects = updated_tracking_objects
 
@@ -187,11 +193,46 @@ class ObjectTracker:
 
         return center_points_x, center_points_y
 
+    def _timestamp(self, video_path: str):
+        """
+        Parses the chunk's name and creates a time signature. Every chunk has
+        traffic-1-of-5-1-of-5.mp4 format.
+        First number means the # of 2 minutes, in the 8.20 minutes chunks
+        Third number means the # of segments of the whole audio
+        Azure Blob did not let us to upload the whole video, thus we needed to improvise.
+
+        :param video_path: the path to the video
+        :return: the timestamp for the given chunk of the video
+        """
+
+        # Parse the numbers from the string
+        numbers = re.search(r'(\d+)-of-(\d+)-(\d+)-of-(\d+)', video_path)
+        if numbers:
+            part_1, total_1, part_2, total_2 = map(int, numbers.groups())
+            if part_1 != 1:
+                # Calculate the start minute and start second
+                start_minute = (part_1 - 1) * 8 + (part_2 - 1) * 2
+                start_second = 20 * (part_1 - 1)
+                if start_second >= 60:
+                    start_second -= 60
+                    start_minute += 1
+
+
+            else:
+                start_minute = (part_2 - 1) * 2
+                start_second = 0
+
+            timestamp = datetime.combine(date.today(), datetime.min.time()).replace(
+                minute=int(start_minute), second=int(start_second)
+            )
+
+            formatted_timestamp = timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            self.timestamp = formatted_timestamp
+
     def process_video(self, video_path: str):
         """
         Processes the video, applies preprocessing, and performs object detection.
         """
-
         try:
             self.cap = cv2.VideoCapture(video_path)
             if not self.cap.isOpened():
@@ -208,6 +249,7 @@ class ObjectTracker:
                     logging.warning("Empty or invalid frame detected. Skipping.")
                     continue
 
+                self.frame_count += 1
                 try:
                     # Convert the frame to grayscale
                     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -254,12 +296,14 @@ class ObjectTracker:
 
 
     def __call__(self, video_path: str):
+        self._timestamp(video_path)
         self.process_video(video_path)
 
 
 
+
 if __name__ == "__main__":
-    video_path = './chunk_120-240.mp4'
+    video_path = '../../downloaded_blobs/traffic-2-of-5-2-of-5.mp4'
 
     tracker = ObjectTracker(should_visualize=False, log_to_database=False)
     tracker(video_path)

@@ -1,11 +1,18 @@
 {
   "version": "2.0",
+  "function_timeout": "-1",
   "logging": {
     "applicationInsights": {
       "samplingSettings": {
         "isEnabled": true,
         "excludedTypes": "Request"
       }
+    }
+  },
+  "extensions": {
+    "blobs": {
+        "maxDegreeOfParallelism": 1,
+        "poisonBlobThreshold": 1
     }
   },
   "extensionBundle": {
