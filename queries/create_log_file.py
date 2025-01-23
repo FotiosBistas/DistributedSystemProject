@@ -1,8 +1,8 @@
 import os
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import window, avg, col, lit
+import pyspark.sql.functions as F
+from pyspark.sql.window import Window
 
-# Initialize Spark session
 spark = SparkSession \
     .builder \
     .appName("Average Speed Per Stream Per 5-Minutes") \
@@ -28,45 +28,54 @@ car_data_df = spark.read \
     .options(**db_properties) \
     .load()
 
-# Print schema to verify the structure
-car_data_df.printSchema()
+car_data_df = car_data_df.withColumn("timestamp", F.to_timestamp("timestamp"))
 
-# Ensure the timestamp column is in Spark's TimestampType
-from pyspark.sql.functions import to_timestamp
-car_data_df = car_data_df.withColumn("timestamp", to_timestamp("timestamp"))
+# Add a separate date column
+car_data_df = car_data_df.withColumn("date", F.to_date("timestamp"))
 
-# Group by 5-minute window and direction, calculate average speed
+# Group by date, direction, 5-minute window
 avg_speed_df = car_data_df.groupBy(
-    window(car_data_df["timestamp"], "5 minutes"),
-    car_data_df["direction"]
-).agg(
-    avg("speed").alias("average_speed")
+    F.col("date"),
+    F.window("timestamp", "5 minutes").alias("time_window"),
+    F.col("direction")
+).agg(F.avg("speed").alias("average_speed"))
+
+avg_speed_df.select("time_window").show(truncate=False)
+
+# Drop duplicates if needed
+avg_speed_df = avg_speed_df.dropDuplicates(["date","time_window","direction"])
+
+# Window for row numbering: partition by (date, direction) => per day & direction
+interval_window = Window.partitionBy("date", "direction") \
+                        .orderBy(F.col("time_window.start"))
+
+avg_speed_with_index = avg_speed_df.withColumn(
+    "interval_index",
+    F.row_number().over(interval_window)
 )
 
-# Add Nth 5-minute interval numbering for continuous indexing
-from pyspark.sql.window import Window
-from pyspark.sql.functions import row_number
+# Prepare final output ordering
+final_df = avg_speed_with_index.orderBy("date", "interval_index", "direction")
 
-# Create a row number per direction to represent the 5-minute interval
-interval_window = Window.partitionBy("direction").orderBy("window.start")
-avg_speed_with_index = avg_speed_df.withColumn("interval_index", row_number().over(interval_window))
+final_df.select("interval_index").show()
 
-# Select and format the result
-formatted_result_df = avg_speed_with_index.select(
-    col("direction"),
-    col("interval_index").alias("5min_interval"),
-    col("average_speed")
-).orderBy("5min_interval", "direction")
-
-# Write results to a log file in the desired format
+# Now write results out
 log_file_path = "average_speed_per_stream.log"
+
+def ordinal_suffix(n: int) -> str:
+    """Convert integer n into its ordinal suffix string (1->1st, 2->2nd, 3->3rd, etc.)"""
+    return (
+        f"{n}th"
+        if 11 <= n % 100 <= 13
+        else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    )
+
 with open(log_file_path, "w") as log_file:
-    for row in formatted_result_df.collect():
-        # Format Nth interval with ordinal suffix (1st, 2nd, 3rd, etc.)
-        interval_suffix = f"{row['5min_interval']}{'th' if 11 <= row['5min_interval'] % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(row['5min_interval'] % 10, 'th')}"
-        log_entry = f"({row['direction']}, {interval_suffix} 5min, {row['average_speed']:.2f} km/h)\n"
+    for row in final_df.collect():
+        idx = row["interval_index"]
+        dir_ = row["direction"]
+        speed = row["average_speed"]
+        log_entry = f"({dir_}, {idx}{ordinal_suffix(idx)} 5min, {speed:.2f} km/h)\n"
         log_file.write(log_entry)
 
-
-# Stop the Spark session
 spark.stop()
