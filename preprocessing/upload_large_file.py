@@ -7,7 +7,9 @@ import os
 import math
 
 code = os.getenv("FUNCTION_CODE")
-url = f"https://video-preprocessing.azurewebsites.net/api/video-preprocessing?code={code}"
+#url = f"https://video-preprocessing.azurewebsites.net/api/video-preprocessing?code={code}"
+url = f"http://localhost:7071/api/video-preprocessing"
+
 
 # Path to the file you want to upload
 video_path = "./traffic.mp4"

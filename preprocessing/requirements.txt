@@ -4,3 +4,4 @@
 
 azure-functions
 azurefunctions-extensions-bindings-blob
+azure-storage-blob
